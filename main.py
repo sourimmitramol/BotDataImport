@@ -10,7 +10,7 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 # Config – set these in App Service app settings
 # -------------------------
 AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME", "my-public-container")
+AZURE_STORAGE_CONTAINER_NAME = os.getenv("AZURE_STORAGE_CONTAINER_NAME", "production-data")
 
 if not AZURE_STORAGE_CONNECTION_STRING:
     raise RuntimeError("AZURE_STORAGE_CONNECTION_STRING is not set in environment variables.")
