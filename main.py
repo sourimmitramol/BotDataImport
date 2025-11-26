@@ -5,6 +5,11 @@ import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 from azure.storage.blob import BlobServiceClient, ContentSettings
+from typing import Dict
+import threading
+import time
+import traceback
+import logging
 
 # -------------------------
 # Config – set these in App Service app settings
@@ -41,6 +46,57 @@ Use `/docs` for Swagger UI and `/redoc` for ReDoc.
     },
 )
 
+# Ensure the logger is configured for the API as well
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+api_logger = logging.getLogger(__name__)
+
+# Import the main pipeline function from your refactored script
+from data_pipeline import run_ingestion_pipeline 
+
+app = FastAPI(
+    title="Data Ingestion Pipeline API",
+    description="API to trigger the Azure Blob data ingestion and merging process."
+)
+
+# Global status tracker to monitor the background job
+pipeline_status: Dict[str, any] = {
+    "status": "IDLE",
+    "last_run_start": None,
+    "last_run_end": None,
+    "result": None,
+    "error": None
+}
+
+def start_pipeline_thread():
+    """Runs the ingestion script in a separate thread for non-blocking execution."""
+    global pipeline_status
+    
+    api_logger.info("Pipeline thread started.")
+    
+    # 1. Set status to running
+    pipeline_status["status"] = "RUNNING"
+    pipeline_status["last_run_start"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    pipeline_status["error"] = None
+    pipeline_status["result"] = None
+    
+    try:
+        # 2. Call the main ingestion function
+        result = run_ingestion_pipeline()
+        
+        # 3. Update status on success
+        pipeline_status["status"] = "SUCCESS"
+        pipeline_status["result"] = result
+        api_logger.info("Pipeline thread completed successfully.")
+        
+    except Exception as e:
+        # 4. Update status on failure
+        pipeline_status["status"] = "FAILED"
+        pipeline_status["error"] = str(e)
+        pipeline_status["traceback"] = traceback.format_exc()
+        api_logger.error(f"Pipeline thread failed: {e}")
+        
+    finally:
+        pipeline_status["last_run_end"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
 class CsvUploadRequest(BaseModel):
     csv_url: HttpUrl
@@ -114,6 +170,37 @@ def upload_csv(body: CsvUploadRequest):
         blob_name=blob_name,
         blob_url=blob_url,
     )
+
+
+@app.post("/trigger_ingestion", tags=["Ingestion"])
+async def trigger_ingestion():
+    """
+    Triggers the data ingestion and merging pipeline.
+    The job runs asynchronously in the background.
+    """
+    global pipeline_status
+    
+    if pipeline_status["status"] == "RUNNING":
+        raise HTTPException(
+            status_code=429, 
+            detail="Pipeline is already running. Please check status at /pipeline_status"
+        )
+
+    # Start the ingestion in a new thread immediately
+    thread = threading.Thread(target=start_pipeline_thread)
+    thread.start()
+    
+    return {
+        "message": "Data ingestion pipeline started asynchronously in a background thread.",
+        "current_status": "RUNNING",
+        "status_check_url": "/pipeline_status"
+    }
+
+@app.get("/pipeline_status", tags=["Status"])
+async def get_pipeline_status():
+    """Returns the current status and results of the last pipeline run."""
+    return pipeline_status
+	
 
 
 # Local run (for testing). In Azure App Service, configure the startup command.
