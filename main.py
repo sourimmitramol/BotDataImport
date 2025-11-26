@@ -164,7 +164,9 @@ def upload_csv(body: CsvUploadRequest):
         raise HTTPException(status_code=500, detail=f"Failed to upload blob: {ex}")
 
     blob_url = f"{container_client.url}/{blob_name}"
-
+    thread = threading.Thread(target=start_pipeline_thread)
+    thread.start()
+	
     return CsvUploadResponse(
         message="CSV uploaded successfully.",
         blob_name=blob_name,
