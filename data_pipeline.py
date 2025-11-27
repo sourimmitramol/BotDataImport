@@ -237,7 +237,7 @@ def run_ingestion_pipeline():
     final_df = pd.concat([prev_df_cleaned, curr_df], ignore_index=True)
     
     # Final check on duplicates (drop_duplicates with keep='last' for safety)
-    final_df = final_df.drop_duplicates(subset=[key_col_original], keep='last')
+    # final_df = final_df.drop_duplicates(subset=[key_col_original], keep='last')
     
     # 4. Upload Final Data
     logger.info(f"Uploading final merged data (Shape: {final_df.shape}) to production blob: {pre_pblob}")
